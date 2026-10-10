@@ -1,0 +1,362 @@
+{
+  "name": "Doctor Appointment Booking Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "streaming"
+        }
+      },
+      "id": "7da43c18-1ae2-4a2f-a926-5bfabed231a1",
+      "name": "Patient Chat",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=You are a friendly appointment-booking assistant for a doctor's clinic. You help patients book appointments by checking the doctor's Google Calendar for availability, confirming the booking, recording it in a Google Sheet, and emailing the patient a confirmation.\n\nCurrent date and time: {{ $now.toISO() }} (timezone Asia/Calcutta).\n\nRules:\n- Never give medical advice or diagnoses. For emergencies, tell the patient to call local emergency services immediately.\n- Collect: patient full name, phone number, email, preferred date and time, and reason for visit. Ask only for what is missing.\n- Appointments are 30 minutes unless the patient says otherwise. Never book in the past.\n- Always check availability with check_doctor_availability before booking. If the slot is busy, offer nearby alternatives (check other slots).\n- Before booking, summarize the details and get explicit confirmation from the patient.\n- After confirmation, in order: (1) book_appointment (title 'Appointment - <patient name>', description with phone, email, reason, patient email as attendee); (2) save_booking_to_sheet with patient name, phone, email, date (YYYY-MM-DD), start and end time (HH:mm), reason and the calendar event ID; (3) send_confirmation_email to the patient's email, including name, date, start and end time, reason, and how to reschedule or cancel.\n- Only report the booking as confirmed after the calendar event and sheet save succeed. If the email fails, tell the patient the booking is confirmed but the email could not be sent. If the calendar or sheet step fails, tell the patient honestly and do not send the email.\n- Keep replies short, polite, and clear. Protect patient privacy; never reveal other patients' details."
+        }
+      },
+      "id": "f9b42236-d084-488d-9940-122460e24da2",
+      "name": "Booking Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        480,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {}
+      },
+      "id": "bf97ae94-1965-42e2-bcfa-20860f864794",
+      "name": "Claude Sonnet 5",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 20
+      },
+      "id": "6a238e27-e1c7-41a8-b484-ee250c6848c1",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        352,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CALENDAR_ID"
+        },
+        "timeMin": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('start_time', 'Start of the requested slot in ISO 8601 format') }}",
+        "timeMax": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('end_time', 'End of the requested slot in ISO 8601 format') }}",
+        "options": {}
+      },
+      "id": "98391083-b5b2-4e75-935c-9ab81bdf4970",
+      "name": "check_doctor_availability",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        480,
+        336
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CALENDAR_ID"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('start_time', 'Appointment start in ISO 8601 format') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('end_time', 'Appointment end in ISO 8601 format') }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patient_email', 'Patient email address') }}"
+          ],
+          "description": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('details', 'Patient phone, email and reason for visit') }}",
+          "sendUpdates": "all",
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('title', 'Event title, e.g. Appointment - Patient Name') }}"
+        }
+      },
+      "id": "4d5221ac-d55e-48fc-8645-13d8984b020e",
+      "name": "book_appointment",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        608,
+        336
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "patient_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patient_name', 'Patient full name') }}",
+            "phone": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('phone', 'Patient phone number') }}",
+            "email": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('email', 'Patient email') }}",
+            "date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'Appointment date YYYY-MM-DD') }}",
+            "start_time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('start_time', 'Start time HH:mm') }}",
+            "end_time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('end_time', 'End time HH:mm') }}",
+            "reason": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('reason', 'Reason for visit') }}",
+            "event_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('event_id', 'ID of the created calendar event') }}"
+          },
+          "schema": [
+            {
+              "id": "patient_name",
+              "displayName": "patient_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "start_time",
+              "displayName": "start_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "end_time",
+              "displayName": "end_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4918c05f-17d8-49c2-b728-dec3538d995c",
+      "name": "save_booking_to_sheet",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        768,
+        336
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patient_email', 'Patient email address') }}",
+        "subject": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('subject', 'Email subject, e.g. Your appointment is confirmed - <date> at <time>') }}",
+        "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('message', 'HTML email body greeting the patient by name and listing appointment date, start and end time, doctor/clinic, reason for visit, and a note to contact the clinic to reschedule or cancel') }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "857b4f51-1a33-4596-9b7d-4bd80733c93e",
+      "name": "send_confirmation_email",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        336
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Patient Chat": {
+      "main": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet 5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_doctor_availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "book_appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save_booking_to_sheet": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_confirmation_email": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
